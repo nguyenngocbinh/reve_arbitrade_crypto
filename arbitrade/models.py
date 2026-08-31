@@ -56,16 +56,74 @@ class Opportunity:
     required_capital: float
     expected_roi: float
     created_at: datetime
+    status: str = "DETECTED"
+    expires_at: datetime | None = None
 
 
 class ExecutionState(str, Enum):
     DETECTED = "DETECTED"
     VALIDATING = "VALIDATING"
+    SUBMITTING = "SUBMITTING"
     EXECUTING = "EXECUTING"
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
-    RECOVERY = "RECOVERY"
+    FILLED = "FILLED"
     COMPLETED = "COMPLETED"
+    REJECTED = "REJECTED"
+    TIMEOUT = "TIMEOUT"
     FAILED = "FAILED"
+    RECOVERY = "RECOVERY"
+    RECOVERY_REQUIRED = "RECOVERY_REQUIRED"
+    CANCELLED = "CANCELLED"
+
+
+@dataclass
+class OrderRecord:
+    id: str
+    opportunity_id: str
+    correlation_id: str
+    exchange: str
+    symbol: str
+    side: str
+    quantity: float
+    price: float
+    status: str = "open"
+    filled_quantity: float = 0.0
+    avg_fill_price: float = 0.0
+    fee: float = 0.0
+    created_at: datetime = field(default_factory=utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
+
+
+@dataclass
+class FillRecord:
+    id: str
+    order_id: str
+    exchange: str
+    symbol: str
+    side: str
+    quantity: float
+    price: float
+    fee: float
+    timestamp: datetime = field(default_factory=utcnow)
+
+
+@dataclass
+class TradeRecord:
+    id: str
+    opportunity_id: str
+    correlation_id: str
+    buy_order_id: str
+    sell_order_id: str
+    symbol: str
+    quantity: float
+    buy_price: float
+    sell_price: float
+    fees: float
+    slippage: float
+    realized_pnl: float
+    state: str
+    opened_at: datetime = field(default_factory=utcnow)
+    closed_at: datetime | None = None
 
 
 @dataclass
@@ -75,6 +133,9 @@ class ExecutionTransaction:
     state: ExecutionState = ExecutionState.DETECTED
     state_history: list[tuple[ExecutionState, datetime]] = field(default_factory=lambda: [(ExecutionState.DETECTED, utcnow())])
     leg_status: dict[str, str] = field(default_factory=dict)
+    buy_order: OrderRecord | None = None
+    sell_order: OrderRecord | None = None
+    fills: list[FillRecord] = field(default_factory=list)
 
     def transition(self, new_state: ExecutionState) -> None:
         self.state = new_state
@@ -103,6 +164,19 @@ class Exposure:
 
 
 @dataclass(frozen=True)
+class RiskDecision:
+    approved: bool
+    reason: str
+    rule: str | None = None
+    current_value: float | None = None
+    configured_limit: float | None = None
+
+    def __iter__(self):
+        """Allow unpacking as (approved, reason) for backward compatibility."""
+        return iter((self.approved, self.reason))
+
+
+@dataclass(frozen=True)
 class BacktestReport:
     total_pnl: float
     net_pnl: float
@@ -117,6 +191,30 @@ class BacktestReport:
     slippage_cost: float
     rejected_opportunities: int
     failed_executions: int
+
+
+class SessionStatus(str, Enum):
+    STARTING = "STARTING"
+    CONNECTING = "CONNECTING"
+    SYNCING = "SYNCING"
+    READY = "READY"
+    RUNNING = "RUNNING"
+    STOPPING = "STOPPING"
+    FLUSHING = "FLUSHING"
+    STOPPED = "STOPPED"
+    ERROR = "ERROR"
+
+
+@dataclass
+class SessionRecord:
+    id: str
+    mode: str
+    enabled_exchanges: list[str]
+    enabled_pairs: list[str]
+    status: SessionStatus = SessionStatus.STARTING
+    started_at: datetime = field(default_factory=utcnow)
+    ended_at: datetime | None = None
+    error_state: str | None = None
 
 
 def weighted_average_price(levels: Iterable[BookLevel], quantity: float) -> float | None:
