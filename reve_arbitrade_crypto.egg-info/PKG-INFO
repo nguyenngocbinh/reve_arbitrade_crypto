@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: reve-arbitrade-crypto
+Version: 0.1.0
+Summary: Modular crypto arbitrage platform scaffold
+Requires-Python: >=3.10
